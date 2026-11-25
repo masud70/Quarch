@@ -103,11 +103,12 @@ runs/20261125_153341_my_experiment/
 │   ├── 153405_temperature_rep01.json     before repetition 1
 │   └── ...
 ├── measurements/
-│   ├── idle/rep00_call01_summary.json
+│   ├── idle/rep00_call01_summary.json + rep00_call01_samples.csv
 │   ├── fit/rep01_call01_summary.json  + rep01_call01_samples.csv
 │   └── predict/...
 └── plots/
     ├── energy_per_repetition.png         one panel per label
+    ├── energy_boxplot.png                energy of every 1-second piece: idle + each repetition
     ├── temperature.png                   temperature before each repetition vs. reference ± spread
     ├── fit/rep01_call01.png              voltage, current, power, energy (whole recording)
     ├── fit/rep01_call01_zoom.png         the same for the first 3 AC cycles

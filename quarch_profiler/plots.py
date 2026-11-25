@@ -3,6 +3,7 @@
     plots/<label>/rep01_call01.png        voltage, current, power, energy (whole recording)
     plots/<label>/rep01_call01_zoom.png   the same for the first few AC cycles
     plots/energy_per_repetition.png       energy above idle of each label, per repetition
+    plots/energy_boxplot.png              energy per second: idle and each repetition (box plots)
     plots/temperature.png                 CPU temperature and waiting time before each repetition
 
 Re-plot a run: python3 -m quarch_profiler.plots runs/<run>/
@@ -16,7 +17,7 @@ import pandas as pd
 from matplotlib.figure import Figure
 
 from .run_folder import RunFolder
-from .settings import SAMPLE_SECONDS, ZOOM_CYCLES
+from .settings import SAMPLE_RATE_HZ, SAMPLE_SECONDS, ZOOM_CYCLES
 
 SURFACE, INK, MUTED, GRID = "#fcfcfb", "#0b0b0b", "#52514e", "#e4e3df"
 BLUE, ORANGE, AQUA, VIOLET = "#2a78d6", "#eb6834", "#1baf7a", "#6250d6"
@@ -35,6 +36,7 @@ def plot_run(run, cycles=ZOOM_CYCLES):
         plot_measurement(first_cycles(samples, cycles), summary,
                          out_dir / f"{name}_zoom.png", zoom_cycles=cycles)
     plot_energy_per_repetition(run)
+    plot_energy_boxplot(run)
     plot_temperature(run)
     print(f"[plots] saved to {run.plots_dir}", flush=True)
 
@@ -97,17 +99,26 @@ def first_cycles(samples, n):
 # The run: energy per repetition, temperature before each repetition
 # ======================================================================
 
-def plot_energy_per_repetition(run):
-    """One panel per label: energy above idle (all calls of a repetition added up)."""
+def energy_per_repetition(run):
+    """(table of label, repetition, energy; energy column name), or (None, None).
+    All calls of a label in one repetition are added up."""
     if not run.measurements_csv.exists():
-        return
+        return None, None
     df = pd.read_csv(run.measurements_csv)
     df = df[df["repetition"] > 0]
     if df.empty:
-        return
+        return None, None
     column = ("energy_above_idle_joules" if df["energy_above_idle_joules"].notna().all()
               else "joules")
     per_rep = df.groupby(["label", "repetition"], sort=False)[column].sum().reset_index()
+    return per_rep, column
+
+
+def plot_energy_per_repetition(run):
+    """One panel per label: energy of each repetition, in order."""
+    per_rep, column = energy_per_repetition(run)
+    if per_rep is None:
+        return
     labels = list(per_rep["label"].unique())
     fig = new_figure(len(labels), height=2.6 * len(labels) + 1)
     for ax, label in zip(fig.axes, labels):
@@ -122,6 +133,63 @@ def plot_energy_per_repetition(run):
     fig.axes[-1].set_xlabel("Repetition", color=MUTED)
     fig.suptitle("Energy per repetition", color=INK, fontsize=11)
     save(fig, run.plots_dir / "energy_per_repetition.png")
+
+
+def energy_per_second(csv_path):
+    """Energy (J) of each full 1-second piece of a recording. A recording shorter
+    than 1 s gives one value: its energy per second."""
+    watts = pd.read_csv(csv_path, usecols=["watts"])["watts"].to_numpy()
+    pieces = len(watts) // SAMPLE_RATE_HZ
+    if pieces == 0:
+        return np.array([watts.mean()])
+    return watts[:pieces * SAMPLE_RATE_HZ].reshape(pieces, SAMPLE_RATE_HZ).sum(axis=1) * SAMPLE_SECONDS
+
+
+def plot_energy_boxplot(run):
+    """One row per label: a box for the idle recording and one per repetition,
+    each made of the energy of every 1-second piece of that recording."""
+    idle = [v for p in sorted(run.measurements_dir.glob("idle/*_samples.csv"))
+            for v in energy_per_second(p)]
+    labels = sorted(p.name for p in run.measurements_dir.iterdir()
+                    if p.is_dir() and p.name != "idle" and any(p.glob("*_samples.csv")))
+    if not labels:
+        return
+    info = json.loads(run.info_file.read_text()) if run.info_file.exists() else {}
+
+    rows = []                                   # (label, [box values], [box names])
+    for label in labels:
+        boxes, names = ([idle], ["idle"]) if idle else ([], [])
+        by_rep = {}
+        for p in sorted((run.measurements_dir / label).glob("*_samples.csv")):
+            rep = int(p.name[3:5])              # rep01_call01_samples.csv -> 1
+            by_rep.setdefault(rep, []).extend(energy_per_second(p))
+        for rep, values in sorted(by_rep.items()):
+            boxes.append(values)
+            names.append(f"rep {rep}")
+        rows.append((label, boxes, names))
+
+    width = max(6, 1.1 * max(len(names) for _, _, names in rows) + 2)
+    fig = new_figure(len(rows), height=3.8 * len(rows) + 0.6)
+    fig.set_size_inches(width, fig.get_size_inches()[1])
+    for ax, (label, boxes, names) in zip(fig.axes, rows):
+        plot = ax.boxplot(boxes, widths=0.55, patch_artist=True,
+                          medianprops={"color": INK, "linewidth": 1.5},
+                          whiskerprops={"color": MUTED}, capprops={"color": MUTED},
+                          flierprops={"marker": "o", "markersize": 3,
+                                      "markerfacecolor": MUTED, "markeredgecolor": "none"})
+        for box, name in zip(plot["boxes"], names):
+            color = MUTED if name == "idle" else BLUE
+            box.set(facecolor=SURFACE, edgecolor=color, linewidth=1.5)
+        ax.set_xticks(range(1, len(names) + 1), names)
+        if info.get("baseline_watts") is not None:
+            ax.axhline(info["baseline_watts"], color=MUTED, linewidth=1, linestyle="--")
+            ax.annotate(f"idle power {info['baseline_watts']:.1f} J/s", (1, info["baseline_watts"]),
+                        xycoords=("axes fraction", "data"), xytext=(-4, 3), ha="right",
+                        textcoords="offset points", fontsize=8, color=MUTED)
+        ax.set_title(label, color=INK, fontsize=10, loc="left")
+        style(ax, "Energy per second (J)")
+    fig.suptitle("Energy of every 1-second piece: idle and each repetition", color=INK, fontsize=11)
+    save(fig, run.plots_dir / "energy_boxplot.png")
 
 
 def plot_temperature(run):

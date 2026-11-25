@@ -85,7 +85,7 @@ class Runner:
 
     def measure_idle_power(self):
         """Once: mean wall power while idle, subtracted from every measurement."""
-        recorder = Recorder(self.run, repetition=0, device=self.device, save_samples=False)
+        recorder = Recorder(self.run, repetition=0, device=self.device)   # samples kept for plots
         try:
             with recorder.segment("idle") as seg:
                 time.sleep(self.idle_seconds)
