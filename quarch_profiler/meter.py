@@ -1,12 +1,13 @@
 """The Quarch meter, reached through quarchpy and QIS."""
 
 import atexit
+import re
 import time
 
-from quarchpy.device import get_quarch_device, scanDevices
-from quarchpy.qis import isQisRunning, startLocalQis
+from quarchpy.device import get_quarch_device
+from quarchpy.qis import QisInterface, isQisRunning, startLocalQis
 
-from .settings import DEVICE, DRAIN_STALL_SECONDS
+from .settings import CONNECT_TIMEOUT, DEVICE, DRAIN_STALL_SECONDS
 
 
 class QuarchMeter:
@@ -22,8 +23,9 @@ class QuarchMeter:
     time, because the meter has a single stream.
     """
 
-    def __init__(self, device=DEVICE):
+    def __init__(self, device=DEVICE, connect_timeout=CONNECT_TIMEOUT):
         self._device = device
+        self.connect_timeout = connect_timeout  # seconds QIS may take to find the meter
         self._dev = None                # quarchpy device, None until connected
         self._recording = False
         atexit.register(self.close)
@@ -32,8 +34,22 @@ class QuarchMeter:
 
     @staticmethod
     def list_devices():
-        """Quarch devices on USB, as {connection string: serial number}."""
-        return scanDevices("usb")
+        """Devices QIS can see, as connection strings, e.g. ["USB::QTL2843-03-023"].
+        Starts QIS if it is not running."""
+        if not isQisRunning():
+            startLocalQis()
+        qis = QisInterface(connectionMessage=False)
+        try:
+            lines = list(qis.get_device_list())
+        finally:
+            qis.disconnect()
+        devices = []
+        for line in lines:
+            # QIS numbers the list ("1) USB::QTL2843-03-023"); keep only the name.
+            name = re.sub(r"^\s*\d+\)\s*", "", line).strip()
+            if name and "no devices" not in name.lower():
+                devices.append(name)
+        return devices
 
     @property
     def device(self):
@@ -60,7 +76,8 @@ class QuarchMeter:
         if self._dev is None:
             if not isQisRunning():
                 startLocalQis()
-            self._dev = get_quarch_device(self._device, ConType="QIS")
+            self._dev = get_quarch_device(self._device, ConType="QIS",
+                                          timeout=str(self.connect_timeout))
             print(f"[quarch_profiler] connected to {self._device}", flush=True)
         return self._dev
 

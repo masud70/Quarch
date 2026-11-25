@@ -14,19 +14,21 @@ class Segment:
             clf.predict(X)
         seg.result.joules
 
+    The result is saved to the run folder (summary, and samples if save_samples).
     If the block raises, the recording is stopped and thrown away, and the
     exception propagates (.result stays None).
     """
 
-    def __init__(self, meter, parser, temperature, label="segment", *, baseline_watts=None,
-                 save_dir=None, keep_samples=True, extra=None):
+    def __init__(self, meter, parser, temperature, run, label="segment", *,
+                 baseline_watts=None, keep_samples=True, save_samples=True, extra=None):
         self.meter = meter
         self.parser = parser
         self.temperature = temperature
+        self.run = run
         self.label = label
         self.baseline_watts = baseline_watts
-        self.save_dir = save_dir
         self.keep_samples = keep_samples
+        self.save_samples = save_samples
         self.extra = extra
         self.result = None
 
@@ -54,9 +56,10 @@ class Segment:
             temp_start=self._temp_start,
             temp_end=temp_end,
             device=self.meter.device,
-            keep_samples=self.keep_samples,
+            ports=self.parser.ports,
             extra=self.extra,
         )
-        if self.save_dir is not None:
-            self.result.save(self.save_dir)
+        self.run.save_measurement(self.result, save_samples=self.save_samples)
+        if not self.keep_samples:
+            self.result.samples = None      # saved to disk (if asked), freed from memory
         return False
