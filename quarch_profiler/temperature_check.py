@@ -1,23 +1,23 @@
-"""Temperature check: wait until the CPU temperature is stable and near idle."""
+"""Temperature check: wait until the CPU temperature is at its idle reference."""
 
 import statistics
 import time
 from datetime import datetime
 
 from .report import CheckReport
-from .settings import (IDLE_SECONDS, TEMP_CHECK_INTERVAL, TEMP_MAX_SPREAD_C,
-                       TEMP_TOLERANCE_C, TEMP_WAIT_TIMEOUT)
+from .settings import IDLE_SECONDS, TEMP_CHECK_INTERVAL, TEMP_SPREAD_C, TEMP_WAIT_TIMEOUT
 
 
 class TemperatureCheck:
-    """Reads the CPU temperature every `interval` seconds for `seconds` (one window).
-    A window passes when it is
-      - stable: max - min <= max_spread_c, and
-      - near idle: mean <= reference_c + tolerance_c (skipped if no reference).
-    Otherwise it reads another window, until one passes or `timeout` seconds pass.
+    """Reads the CPU temperature every `interval` seconds for `seconds` (one window)
+    and repeats until a window passes, or `timeout` seconds pass:
+
+      - no reference yet (before the run): max - min <= spread_c.
+        The window's mean then becomes the reference.
+      - with a reference: every reading is within reference_c +- spread_c.
 
         report = TemperatureCheck(CpuTemperature()).run(reference_c=38.0)
-        report.passed                 # True / False, None = no sensor
+        report.passed                       # True / False, None = no sensor
         report.data["idle_temperature_c"]   # mean of the last window
     """
 
@@ -25,8 +25,7 @@ class TemperatureCheck:
         self.temperature = temperature
 
     def run(self, reference_c=None, seconds=IDLE_SECONDS, interval=TEMP_CHECK_INTERVAL,
-            tolerance_c=TEMP_TOLERANCE_C, max_spread_c=TEMP_MAX_SPREAD_C,
-            timeout=TEMP_WAIT_TIMEOUT):
+            spread_c=TEMP_SPREAD_C, timeout=TEMP_WAIT_TIMEOUT):
         started_at = datetime.now().isoformat(timespec="seconds")
         if not self.temperature.available:
             return CheckReport("temperature", passed=None, data={"sensor": None},
@@ -37,33 +36,31 @@ class TemperatureCheck:
         windows = []
         while True:
             window = self._read_window(seconds, interval)
-            window["stable"] = window["max_c"] - window["min_c"] <= max_spread_c
-            window["near_idle"] = reference_c is None or window["mean_c"] <= reference_c + tolerance_c
-            window["ok"] = window["stable"] and window["near_idle"]
+            window["ok"] = self._passes(window, reference_c, spread_c)
             windows.append(window)
-            print(f"[temperature] window {len(windows)}: mean {window['mean_c']:.1f} degC, "
-                  f"spread {window['max_c'] - window['min_c']:.1f} -> "
-                  f"{'ok' if window['ok'] else 'waiting'}", flush=True)
+            print(f"[temperature] window {len(windows)}: {window['min_c']:.1f} to "
+                  f"{window['max_c']:.1f} degC -> {'ok' if window['ok'] else 'waiting'}",
+                  flush=True)
             if window["ok"] or time.monotonic() - t_start > timeout:
                 break
 
         last = windows[-1]
         waited = time.monotonic() - t_start
-        rule = f"spread <= {max_spread_c} degC"
-        if reference_c is not None:
-            rule += f", mean <= {reference_c:.1f} + {tolerance_c} degC"
+        if reference_c is None:
+            rule = f"max - min <= {spread_c} degC (sets the reference)"
+        else:
+            rule = f"every reading in {reference_c:.1f} +- {spread_c} degC"
         lines = [
-            f"CPU temperature every {interval} s for {seconds} s ({rule})",
-            f"{len(windows)} window(s), {waited:.0f} s; last window: mean {last['mean_c']:.1f}, "
-            f"min {last['min_c']:.1f}, max {last['max_c']:.1f} degC",
-            "stable and near idle" if last["ok"] else
-            f"WARNING: not stable / near idle after {waited:.0f} s",
+            f"CPU temperature every {interval} s for {seconds} s: {rule}",
+            f"{len(windows)} window(s), {waited:.0f} s; last window {last['min_c']:.1f} to "
+            f"{last['max_c']:.1f} degC, mean {last['mean_c']:.1f}",
+            "at idle temperature" if last["ok"] else
+            f"WARNING: not at idle temperature after {waited:.0f} s",
         ]
         data = {
             "sensor": self.temperature.zone,
             "reference_c": reference_c,
-            "tolerance_c": tolerance_c,
-            "max_spread_c": max_spread_c,
+            "spread_c": spread_c,
             "idle_temperature_c": last["mean_c"],
             "waited_seconds": waited,
             "n_windows": len(windows),
@@ -71,6 +68,13 @@ class TemperatureCheck:
         }
         return CheckReport("temperature", passed=last["ok"], data=data, lines=lines,
                            started_at=started_at)
+
+    @staticmethod
+    def _passes(window, reference_c, spread_c):
+        if reference_c is None:
+            return window["max_c"] - window["min_c"] <= spread_c
+        return (window["min_c"] >= reference_c - spread_c
+                and window["max_c"] <= reference_c + spread_c)
 
     def _read_window(self, seconds, interval):
         n = max(1, round(seconds / interval))

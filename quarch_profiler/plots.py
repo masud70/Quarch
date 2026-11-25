@@ -125,25 +125,28 @@ def plot_energy_per_repetition(run):
 
 
 def plot_temperature(run):
-    """CPU temperature (mean of the passing window) and waiting time per check."""
+    """Per check: the readings of the last window (min to max, dot = mean) against
+    the reference +- spread band, and how long the check took."""
     checks = [json.loads(p.read_text()) for p in sorted(run.checks_dir.glob("*_temperature_rep*.json"))]
     checks = [c for c in checks if c.get("sensor")]
     if not checks:
         return
     reps = [c["repetition"] for c in checks]
+    last = [c["windows"][-1] for c in checks]
     fig = new_figure(2, height=5.5)
     ax_t, ax_w = fig.axes
 
-    ax_t.plot(reps, [c["idle_temperature_c"] for c in checks], color=BLUE, linewidth=2,
-              marker="o", markersize=6)
     reference = checks[0]["idle_temperature_c"]
-    tolerance = checks[-1]["tolerance_c"]
+    spread = checks[0]["spread_c"]
+    ax_t.axhspan(reference - spread, reference + spread, color=GRID, alpha=0.6, linewidth=0)
     ax_t.axhline(reference, color=MUTED, linewidth=1, linestyle="--")
-    ax_t.axhline(reference + tolerance, color=MUTED, linewidth=1, linestyle=":")
-    for value, text in ((reference, f"idle reference {reference:.1f} degC"),
-                        (reference + tolerance, f"limit: reference + {tolerance:g} degC")):
-        ax_t.annotate(text, (0, value), xycoords=("axes fraction", "data"), xytext=(4, 3),
-                      textcoords="offset points", fontsize=8, color=MUTED)
+    ax_t.annotate(f"reference {reference:.1f} ± {spread:g} degC", (0, reference + spread),
+                  xycoords=("axes fraction", "data"), xytext=(4, 3),
+                  textcoords="offset points", fontsize=8, color=MUTED)
+    ax_t.vlines(reps, [w["min_c"] for w in last], [w["max_c"] for w in last],
+                color=BLUE, linewidth=2)
+    ax_t.plot(reps, [w["mean_c"] for w in last], color=BLUE, linestyle="none",
+              marker="o", markersize=6)
     style(ax_t, "CPU temperature (degC)")
 
     waited = [c["waited_seconds"] for c in checks]

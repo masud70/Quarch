@@ -25,13 +25,12 @@ class Runner:
 
     1. once:   process check (you choose what to close), CPU usage report,
                idle temperature (wait until stable = the reference), idle power
-    2. each repetition: wait until the temperature is stable and near the
-               reference, then run the script in a fresh Python process
+    2. each repetition: wait until every temperature reading is within the
+               reference +- spread, then run the script in a fresh Python process
     3. at the end: summary.csv and plots
     """
 
-    def __init__(self, script, repeat=1, idle_seconds=IDLE_SECONDS, script_args=(),
-                 device=DEVICE):
+    def __init__(self, script, repeat=1, idle_seconds=IDLE_SECONDS, script_args=(), device=DEVICE):
         self.script = Path(script).resolve()
         self.repeat = repeat
         self.idle_seconds = idle_seconds
@@ -69,8 +68,9 @@ class Runner:
         self.measure_idle_power()
 
     def wait_for_idle_temperature(self, repetition):
-        """Wait until the CPU temperature is stable (and, after the first check,
-        near the reference). Raises if it does not settle."""
+        """Before the run: wait until stable; the mean becomes the reference.
+        Before a repetition: wait until every reading is within reference +- spread.
+        Raises if it does not settle."""
         report = self.temperature_check.run(reference_c=self.reference_c,
                                             seconds=self.idle_seconds)
         report.name = f"temperature_rep{repetition:02d}"

@@ -31,7 +31,7 @@ once         1. processes     list them; you choose which to close
              2. CPU usage     report how busy the machine is
              3. temperature   wait until stable -> this is the idle reference
              4. idle power    measure it -> subtracted from every measurement
-each rep     5. temperature   wait until stable and near the idle reference
+each rep     5. temperature   wait until within idle reference ± spread
              6. your file     run in a fresh Python process; record every
                               @measure / segment
 at the end   7. summary.csv and plots
@@ -43,9 +43,11 @@ at the end   7. summary.csv and plots
   force-killed. Without a terminal, the check only reports. It runs once per run,
   not before every repetition.
 - **Temperature (steps 3 and 5).** The CPU temperature is read every second for
-  `--idle-seconds` (default 30). A window passes when it is:
-  - **stable:** max − min ≤ 1 °C, and
-  - **near idle:** mean ≤ idle reference + 2 °C. Cooler than the reference is fine.
+  `--idle-seconds` (default 30), with one setting, the spread (`TEMP_SPREAD_C`, 1 °C):
+  - **before the run:** a window passes when max − min ≤ spread. Its mean becomes the
+    **idle reference**, fixed for the whole run.
+  - **before each repetition:** a window passes when every reading is within
+    reference ± spread.
 
   If a window does not pass, another one is read, until one passes. After 20 minutes
   the run stops.
@@ -106,7 +108,7 @@ runs/20261125_153341_my_experiment/
 │   └── predict/...
 └── plots/
     ├── energy_per_repetition.png         one panel per label
-    ├── temperature.png                   temperature and waiting time before each repetition
+    ├── temperature.png                   temperature before each repetition vs. reference ± spread
     ├── fit/rep01_call01.png              voltage, current, power, energy (whole recording)
     ├── fit/rep01_call01_zoom.png         the same for the first 3 AC cycles
     └── predict/...
@@ -160,7 +162,7 @@ Try it: `python3 -m quarch_profiler test/example_experiment.py -n 3`
 
 | Message | What to do |
 |---|---|
-| `CPU temperature did not settle before repetition N` | Something keeps the CPU busy or warm. Look at the CPU check in `report.txt`. To loosen the rule, raise `TEMP_MAX_SPREAD_C` / `TEMP_TOLERANCE_C` in `settings.py`. |
+| `CPU temperature did not settle before repetition N` | Something keeps the CPU busy or warm. Look at the CPU check in `report.txt`. To loosen the rule, raise `TEMP_SPREAD_C` in `settings.py`. |
 | `the script failed (exit code ...)` | Your file raised an error; it is printed above. The run stops; what was recorded is kept and plotted. |
 | `not started by the runner - nothing is measured` | You ran the file directly. Use `python3 -m quarch_profiler <file>`. |
 | `a Quarch recording is already running - recordings cannot nest` | A measured function was called inside another measurement. |
@@ -183,7 +185,7 @@ quarch_profiler/
 ├── plots.py              plot_run          all graphs
 ├── process_check.py      ProcessCheck      list processes, close the ones you choose
 ├── cpu_check.py          CpuUsageCheck     CPU usage
-├── temperature_check.py  TemperatureCheck  wait until stable and near idle
+├── temperature_check.py  TemperatureCheck  wait until at the idle reference
 ├── temperature.py        CpuTemperature    reads the CPU temperature
 ├── meter.py              QuarchMeter       the meter, through quarchpy and QIS
 ├── samples.py            SampleParser      raw meter text -> samples table

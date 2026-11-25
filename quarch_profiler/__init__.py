@@ -28,7 +28,7 @@ Files:
     plots.py              plot_run         - all graphs
     process_check.py      ProcessCheck     - list processes, close the ones you choose
     cpu_check.py          CpuUsageCheck    - CPU usage
-    temperature_check.py  TemperatureCheck - wait until the temperature is stable and idle
+    temperature_check.py  TemperatureCheck - wait until the temperature is at its idle reference
     temperature.py        CpuTemperature   - reads the CPU temperature
     meter.py              QuarchMeter      - the meter, through quarchpy
     samples.py            SampleParser     - raw meter text -> samples table
