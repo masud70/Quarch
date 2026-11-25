@@ -1,0 +1,15 @@
+{
+  "created": "2026-11-25T14:31:41",
+  "host": "chickadee-06.cs.umanitoba.ca",
+  "python": "3.10.12",
+  "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.35",
+  "name": "device_test",
+  "device": "USB::QTL2843-03-023",
+  "connect_timeout": 5,
+  "ports": [
+    "L1"
+  ],
+  "prechecks": true,
+  "baseline_watts": null,
+  "temperature_sensor": "/sys/class/thermal/thermal_zone2"
+}

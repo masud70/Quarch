@@ -1,9 +1,7 @@
-"""The result of one recording, and a list of results."""
+"""The result of one recording."""
 
 import json
-import re
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
@@ -13,9 +11,11 @@ from .settings import SAMPLE_SECONDS
 
 @dataclass
 class Measurement:
-    """Summary numbers of one recording, plus (optionally) every sample."""
+    """Summary numbers of one recording, plus (until saved) every sample."""
 
     label: str
+    repetition: int                     # 0 = the idle measurement before the repetitions
+    call: int                           # 1 for the first call of this label in a repetition
     started_at: str                     # ISO time the recording started
     workload_seconds: float             # timed by perf_counter around the code
     window_seconds: float               # length of the recording (from the sample count)
@@ -25,19 +25,18 @@ class Measurement:
     peak_watts: float
     min_watts: float
     std_watts: float
-    baseline_watts: float | None        # idle power, if given
+    baseline_watts: float | None        # idle power, if known
     baseline_joules: float | None       # idle power x window
     energy_above_idle_joules: float | None
     cpu_temp_start_c: float
     cpu_temp_end_c: float               # read inside the window, before the meter readout
     device: str = ""
     ports: tuple = ()                   # meter ports counted in watts / joules
-    extra: dict = field(default_factory=dict)       # e.g. function name, call number
     samples: pd.DataFrame | None = field(default=None, repr=False)
 
     @classmethod
-    def from_samples(cls, label, samples, *, started_at, workload_seconds, baseline_watts,
-                     temp_start, temp_end, device, ports=(), keep_samples=True, extra=None):
+    def from_samples(cls, label, samples, *, repetition, call, started_at, workload_seconds,
+                     baseline_watts, temp_start, temp_end, device, ports):
         """Build a Measurement from the DataFrame made by SampleParser."""
         watts = samples["watts"].to_numpy()
         if len(watts) == 0:
@@ -48,6 +47,8 @@ class Measurement:
         baseline_joules = None if baseline_watts is None else baseline_watts * window
         return cls(
             label=label,
+            repetition=repetition,
+            call=call,
             started_at=started_at,
             workload_seconds=workload_seconds,
             window_seconds=window,
@@ -64,9 +65,13 @@ class Measurement:
             cpu_temp_end_c=temp_end,
             device=device,
             ports=tuple(ports),
-            extra=dict(extra or {}),
-            samples=samples if keep_samples else None,
+            samples=samples,
         )
+
+    @property
+    def name(self):
+        """File name stem, e.g. rep01_call01."""
+        return f"rep{self.repetition:02d}_call{self.call:02d}"
 
     def summary(self):
         """Everything except the samples, as a flat dict."""
@@ -75,27 +80,10 @@ class Measurement:
         return d
 
     def save(self, out_dir, include_samples=True):
-        """Write <time>_<label>_summary.json and, if samples are kept and
-        include_samples is True, _samples.csv. Returns the summary path."""
+        """Write <name>_summary.json and, if include_samples, <name>_samples.csv."""
         out_dir = Path(out_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
-        stem = (datetime.fromisoformat(self.started_at).strftime("%Y%m%d_%H%M%S_%f")
-                + "_" + re.sub(r"[^\w.-]+", "_", self.label))
         if include_samples and self.samples is not None:
-            self.samples.to_csv(out_dir / f"{stem}_samples.csv", index=False)
-        path = out_dir / f"{stem}_summary.json"
-        path.write_text(json.dumps(self.summary(), indent=2, default=str))
-        return path
-
-
-class MeasurementLog(list):
-    """A list of Measurements, e.g. every call of a measured function."""
-
-    @property
-    def last(self):
-        """The newest Measurement, None if empty."""
-        return self[-1] if self else None
-
-    def to_frame(self):
-        """One row per Measurement (without samples)."""
-        return pd.DataFrame([m.summary() for m in self])
+            self.samples.to_csv(out_dir / f"{self.name}_samples.csv", index=False)
+        (out_dir / f"{self.name}_summary.json").write_text(
+            json.dumps(self.summary(), indent=2, default=str))

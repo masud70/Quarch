@@ -1,0 +1,22 @@
+{
+  "label": "idle",
+  "started_at": "2026-11-25T14:33:30.817989",
+  "workload_seconds": 10.010278087109327,
+  "window_seconds": 10.018,
+  "n_samples": 80144,
+  "joules": 350.53675292875005,
+  "mean_watts": 34.99069204719006,
+  "peak_watts": 111.738768,
+  "min_watts": -5.71824,
+  "std_watts": 27.009978898577902,
+  "baseline_watts": null,
+  "baseline_joules": null,
+  "energy_above_idle_joules": null,
+  "cpu_temp_start_c": 37.0,
+  "cpu_temp_end_c": 37.0,
+  "device": "USB::QTL2843-03-023",
+  "ports": [
+    "L1"
+  ],
+  "extra": {}
+}

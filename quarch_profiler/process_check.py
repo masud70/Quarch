@@ -55,7 +55,7 @@ class ProcessCheck:
                  f"yours ({user}). Your busiest that can be closed:"]
         lines += self._table(candidates)
 
-        closed, still_running, failed, chosen = [], [], [], []
+        closed, already_exited, still_running, failed, chosen = [], [], [], [], []
         if not candidates:
             lines.append("nothing to close")
         elif not interactive:
@@ -64,11 +64,11 @@ class ProcessCheck:
             print("\n".join(lines), flush=True)
             chosen = self._choose(candidates)
             if chosen:
-                closed, still_running, failed = self._close(
-                    [processes[r["pid"]] for r in chosen])
-            lines.append("chosen: " + (", ".join(f"{r['name']} ({r['pid']})" for r in chosen)
-                                       or "none"))
-            for label, items in (("closed", closed), ("STILL RUNNING", still_running),
+                closed, already_exited, still_running, failed = self._close(chosen, processes)
+            lines.append("chosen: " + (", ".join(self._label(r) for r in chosen) or "none"))
+            for label, items in (("closed", closed),
+                                 ("already exited on its own", already_exited),
+                                 ("STILL RUNNING", still_running),
                                  ("could not close", failed)):
                 if items:
                     lines.append(f"{label}: " + ", ".join(items))
@@ -81,6 +81,7 @@ class ProcessCheck:
             "candidates": candidates,
             "chosen": [r["pid"] for r in chosen],
             "closed": closed,
+            "already_exited": already_exited,
             "still_running": still_running,
             "failed": failed,
             "all_processes": sorted(rows, key=lambda r: r["cpu_percent"], reverse=True),
@@ -177,23 +178,24 @@ class ProcessCheck:
                 return chosen
             return []
 
-    def _close(self, processes):
-        """SIGTERM each process and wait. Returns (closed, still_running, failed)
-        as lists of "name (pid)"."""
-        labels = {p.pid: self._label(p) for p in processes}   # names, while still running
-        asked, failed = [], []
-        for p in processes:
+    def _close(self, chosen, processes):
+        """SIGTERM each chosen process and wait. Returns lists of "name (pid)":
+        (closed, already_exited, still_running, failed)."""
+        labels = {r["pid"]: self._label(r) for r in chosen}  # names from the list shown
+        asked, already_exited, failed = [], [], []
+        for r in chosen:
+            p = processes[r["pid"]]
             try:
                 p.terminate()       # psutil checks the pid was not reused
                 asked.append(p)
-            except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
-                failed.append(f"{labels[p.pid]}: {type(e).__name__}")
+            except psutil.NoSuchProcess:
+                already_exited.append(labels[p.pid])     # it quit between listing and closing
+            except psutil.AccessDenied:
+                failed.append(f"{labels[p.pid]}: permission denied")
         gone, alive = psutil.wait_procs(asked, timeout=self.close_timeout)
-        return ([labels[p.pid] for p in gone], [labels[p.pid] for p in alive], failed)
+        return ([labels[p.pid] for p in gone], already_exited,
+                [labels[p.pid] for p in alive], failed)
 
     @staticmethod
-    def _label(p):
-        try:
-            return f"{p.name()} ({p.pid})"
-        except psutil.Error:
-            return f"pid {p.pid}"
+    def _label(row):
+        return f"{row['name']} ({row['pid']})"

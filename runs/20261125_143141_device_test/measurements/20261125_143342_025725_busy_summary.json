@@ -1,0 +1,25 @@
+{
+  "label": "busy",
+  "started_at": "2026-11-25T14:33:42.025725",
+  "workload_seconds": 2.000004629138857,
+  "window_seconds": 2.0015,
+  "n_samples": 16012,
+  "joules": 123.760078476125,
+  "mean_watts": 61.833663990069944,
+  "peak_watts": 141.522552,
+  "min_watts": -2.015829,
+  "std_watts": 44.53955864748328,
+  "baseline_watts": 34.99069204719006,
+  "baseline_joules": 70.0338701324509,
+  "energy_above_idle_joules": 53.7262083436741,
+  "cpu_temp_start_c": 53.0,
+  "cpu_temp_end_c": 60.0,
+  "device": "USB::QTL2843-03-023",
+  "ports": [
+    "L1"
+  ],
+  "extra": {
+    "function": "__main__.work",
+    "call_index": 1
+  }
+}

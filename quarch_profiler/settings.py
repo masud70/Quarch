@@ -1,7 +1,10 @@
-"""Fixed settings of the Quarch meter. Edit DEVICE if you use a different meter."""
+"""All settings in one place. Edit DEVICE if you use a different meter."""
 
-# Connection string of the meter. Find yours with quarch_profiler.list_devices(),
-# or switch at run time with quarch_profiler.set_device(...).
+# ======================================================================
+# Meter
+# ======================================================================
+
+# Connection string of the meter (see QuarchMeter.list_devices()).
 DEVICE = "USB::QTL2843-03-023"
 
 # Seconds to wait for QIS to find the meter when connecting.
@@ -27,15 +30,27 @@ PORTS = ("L1",)
 
 
 # ======================================================================
-# Run folder
+# Runs
 # ======================================================================
 
-# Every QuarchProfiler writes all its reports to RUNS_DIR/<date_time>_<name>/.
+# Every run writes everything to RUNS_DIR/<date>_<time>_<file name>/.
 RUNS_DIR = "runs"
 
+# Seconds of idle used for the idle temperature and idle power.
+IDLE_SECONDS = 30
+
+# AC cycles shown in the zoomed measurement plots.
+ZOOM_CYCLES = 3
+
+# How the runner tells your file (a separate process) where to record.
+ENV_RUN_DIR = "QUARCH_RUN_DIR"
+ENV_REPETITION = "QUARCH_REPETITION"
+ENV_BASELINE_WATTS = "QUARCH_BASELINE_WATTS"
+ENV_DEVICE = "QUARCH_DEVICE"
+
 
 # ======================================================================
-# Checks before measuring (also callable any time)
+# Checks
 # ======================================================================
 
 # CPU usage: read every CPU_CHECK_INTERVAL seconds for CPU_CHECK_SECONDS.
@@ -44,12 +59,13 @@ CPU_CHECK_INTERVAL = 1
 CPU_IDLE_PERCENT = 5        # mean CPU usage at or below this counts as idle
 CPU_TOP_PROCESSES = 10      # busiest processes listed in the report
 
-# Temperature: read every TEMP_CHECK_INTERVAL seconds for TEMP_CHECK_SECONDS;
-# if any reading is above TEMP_LIMIT_C, read another window, until it is cool
-# or TEMP_WAIT_TIMEOUT seconds have passed.
-TEMP_CHECK_SECONDS = 30
+# Temperature: read every TEMP_CHECK_INTERVAL seconds for a window of
+# IDLE_SECONDS. A window passes when it is stable (max - min <= TEMP_MAX_SPREAD_C)
+# and not more than TEMP_TOLERANCE_C above the idle reference. Otherwise another
+# window is read, until one passes or TEMP_WAIT_TIMEOUT seconds have passed.
 TEMP_CHECK_INTERVAL = 1
-TEMP_LIMIT_C = 55.0
+TEMP_MAX_SPREAD_C = 1.0
+TEMP_TOLERANCE_C = 2.0
 TEMP_WAIT_TIMEOUT = 1200
 
 # Processes: how many of your busiest processes to offer for closing.

@@ -1,0 +1,22 @@
+{
+  "label": "sleep",
+  "started_at": "2026-11-25T14:33:52.537366",
+  "workload_seconds": 2.0015451749786735,
+  "window_seconds": 2.0035,
+  "n_samples": 16028,
+  "joules": 70.90296408562499,
+  "mean_watts": 35.38955032973546,
+  "peak_watts": 124.520004,
+  "min_watts": -4.81515,
+  "std_watts": 27.517830812621174,
+  "baseline_watts": 34.99069204719006,
+  "baseline_joules": 70.10385151654528,
+  "energy_above_idle_joules": 0.7991125690797105,
+  "cpu_temp_start_c": 59.0,
+  "cpu_temp_end_c": 39.0,
+  "device": "USB::QTL2843-03-023",
+  "ports": [
+    "L1"
+  ],
+  "extra": {}
+}

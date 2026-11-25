@@ -26,10 +26,10 @@ def work(seconds):
     busy(seconds)
 
 
-work(2)
-work(6)
+work(10)
+work(20)
 e1, e3 = (m.energy_above_idle_joules for m in work.measurements)
-print(f"busy 2 s: {e1:.2f} J, 6 s: {e3:.2f} J, ratio {e3 / e1:.2f} (expect ~3)")
+print(f"busy 10 s: {e1:.2f} J, 20 s: {e3:.2f} J, ratio {e3 / e1:.2f} (expect ~2)")
 
 with profiler.segment("sleep") as seg:
     time.sleep(2)
